@@ -1,36 +1,59 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sonos Music App for Kids
 
-## Getting Started
+A simple home web app for young children to browse Spotify playlists and play music on a Sonos speaker. Designed to run on your local home network — big buttons, no complexity.
 
-First, run the development server:
+## How it works
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+A parent sets up the app once via the admin panel: connect a Spotify account, pick a Sonos speaker, and choose which playlists to show. Children then see a grid of playlist covers on the main screen and can tap to browse tracks and play them directly on the Sonos speaker.
+
+## Features
+
+- **Simple kid-friendly UI** — Large playlist covers and track list with album art
+- **Sonos control** — Discovers Sonos speakers on your LAN via SSDP; plays, pauses, resumes, and adjusts volume
+- **Spotify integration** — Browses your Spotify playlists and streams via Sonos's native Spotify service
+- **Admin panel** — Password-protected setup page for parents to manage everything
+
+## Setup
+
+### 1. Spotify app
+
+Create an app at [developer.spotify.com](https://developer.spotify.com/dashboard) and add a redirect URI:
+
+```
+http://127.0.0.1:3000/api/auth/spotify/callback
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Environment
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Copy `.env.local.example` to `.env.local` and fill in your values:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+SPOTIFY_CLIENT_ID=...
+SPOTIFY_CLIENT_SECRET=...
+SPOTIFY_REDIRECT_URI=http://127.0.0.1:3000/api/auth/spotify/callback
+ADMIN_PASSWORD=...
+```
 
-## Learn More
+### 3. Run
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm install
+npm run dev
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Access the app at `http://127.0.0.1:3000` (use the IP, not `localhost`, to avoid Spotify redirect URI issues).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 4. First-time admin setup
 
-## Deploy on Vercel
+Visit `http://127.0.0.1:3000/admin` and log in with your admin password, then:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Connect your Spotify account
+2. Scan for Sonos speakers and select one
+3. Add playlists to display on the main screen
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Stack
+
+- [Next.js](https://nextjs.org) — App Router, API routes
+- [@svrooij/sonos](https://github.com/svrooij/node-sonos-ts) — Local Sonos LAN control
+- Spotify Web API — Playlist browsing and track metadata
+- Tailwind CSS — Styling
