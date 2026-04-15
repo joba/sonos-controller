@@ -34,7 +34,17 @@ SPOTIFY_REDIRECT_URI=http://127.0.0.1:3000/api/auth/spotify/callback
 ADMIN_PASSWORD=...
 ```
 
-### 3. Run
+### 3. Local app config
+
+Create a local config file from the example:
+
+```bash
+cp data/config.example.json data/config.json
+```
+
+`data/config.json` and `data/tokens.json` are local-only and ignored by git.
+
+### 4. Run
 
 ```bash
 npm install
@@ -43,7 +53,7 @@ npm run dev
 
 Access the app at `http://127.0.0.1:3000` (use the IP, not `localhost`, to avoid Spotify redirect URI issues).
 
-### 4. First-time admin setup
+### 5. First-time admin setup
 
 Visit `http://127.0.0.1:3000/admin` and log in with your admin password, then:
 

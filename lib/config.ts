@@ -14,6 +14,7 @@ export type SavedPlaylist = {
 export type Config = {
   sonosDeviceIp: string | null;
   sonosDeviceName: string | null;
+  maxVolume: number;
   playlists: SavedPlaylist[];
 };
 
@@ -22,6 +23,23 @@ export type Tokens = {
   refreshToken: string;
   expiresAt: number; // Unix timestamp ms
 };
+
+const DEFAULT_MAX_VOLUME = 50;
+const MIN_VOLUME = 0;
+const MAX_VOLUME = 100;
+
+const DEFAULT_CONFIG: Config = {
+  sonosDeviceIp: null,
+  sonosDeviceName: null,
+  maxVolume: DEFAULT_MAX_VOLUME,
+  playlists: [],
+};
+
+function normalizeMaxVolume(value: unknown): number {
+  const numeric = Math.round(Number(value));
+  if (!Number.isFinite(numeric)) return DEFAULT_MAX_VOLUME;
+  return Math.max(MIN_VOLUME, Math.min(MAX_VOLUME, numeric));
+}
 
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) {
@@ -32,9 +50,17 @@ function ensureDataDir() {
 export function readConfig(): Config {
   ensureDataDir();
   if (!fs.existsSync(CONFIG_FILE)) {
-    return { sonosDeviceIp: null, sonosDeviceName: null, playlists: [] };
+    return DEFAULT_CONFIG;
   }
-  return JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
+  const parsed = JSON.parse(
+    fs.readFileSync(CONFIG_FILE, "utf-8"),
+  ) as Partial<Config>;
+  return {
+    ...DEFAULT_CONFIG,
+    ...parsed,
+    maxVolume: normalizeMaxVolume(parsed.maxVolume),
+    playlists: Array.isArray(parsed.playlists) ? parsed.playlists : [],
+  };
 }
 
 export function writeConfig(config: Config): void {

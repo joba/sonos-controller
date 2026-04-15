@@ -11,6 +11,7 @@ export default function AdminPage() {
   const [sonosDevices, setSonosDevices] = useState<SonosDevice[]>([]);
   const [selectedIp, setSelectedIp] = useState<string>("");
   const [selectedName, setSelectedName] = useState<string>("");
+  const [maxVolume, setMaxVolume] = useState<number>(50);
   const [savedPlaylists, setSavedPlaylists] = useState<SavedPlaylist[]>([]);
   const [myPlaylists, setMyPlaylists] = useState<SpotifyPlaylist[]>([]);
   const [showAddPlaylist, setShowAddPlaylist] = useState(false);
@@ -32,6 +33,7 @@ export default function AdminPage() {
     const playlists = await playlistsRes.json();
     setSelectedIp(config.sonosDeviceIp ?? "");
     setSelectedName(config.sonosDeviceName ?? "");
+    setMaxVolume(typeof config.maxVolume === "number" ? config.maxVolume : 50);
     setSavedPlaylists(playlists);
 
     // Check Spotify is linked
@@ -49,7 +51,9 @@ export default function AdminPage() {
       const devices: SonosDevice[] = await res.json();
       setSonosDevices(devices);
       if (devices.length === 0) {
-        setScanError("No Sonos speakers found. Make sure you're on the same Wi-Fi network.");
+        setScanError(
+          "No Sonos speakers found. Make sure you're on the same Wi-Fi network.",
+        );
       }
     } else {
       const err = await res.json().catch(() => ({}));
@@ -63,9 +67,27 @@ export default function AdminPage() {
     await fetch("/api/admin/config", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sonosDeviceIp: device.ip, sonosDeviceName: device.name }),
+      body: JSON.stringify({
+        sonosDeviceIp: device.ip,
+        sonosDeviceName: device.name,
+        maxVolume,
+      }),
     });
     setStatus(`Speaker "${device.name}" saved!`);
+    setTimeout(() => setStatus(""), 2000);
+  }
+
+  async function saveMaxVolume() {
+    await fetch("/api/admin/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sonosDeviceIp: selectedIp || null,
+        sonosDeviceName: selectedName || null,
+        maxVolume,
+      }),
+    });
+    setStatus(`Max volume set to ${maxVolume}`);
     setTimeout(() => setStatus(""), 2000);
   }
 
@@ -89,7 +111,7 @@ export default function AdminPage() {
       body: JSON.stringify(payload),
     });
     setSavedPlaylists((prev) =>
-      prev.find((p) => p.id === pl.id) ? prev : [...prev, payload]
+      prev.find((p) => p.id === pl.id) ? prev : [...prev, payload],
     );
     setShowAddPlaylist(false);
   }
@@ -103,7 +125,9 @@ export default function AdminPage() {
     <main className="max-w-xl mx-auto p-6 space-y-8">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Admin</h1>
-        <a href="/" className="text-sm text-gray-400 hover:text-white">← Kids view</a>
+        <a href="/" className="text-sm text-gray-400 hover:text-white">
+          ← Kids view
+        </a>
       </div>
 
       {status && <p className="text-green-400 text-sm">{status}</p>}
@@ -144,7 +168,9 @@ export default function AdminPage() {
         </div>
 
         {scanning && (
-          <p className="text-gray-400 text-sm">Scanning your network for Sonos speakers (takes ~5s)…</p>
+          <p className="text-gray-400 text-sm">
+            Scanning your network for Sonos speakers (takes ~5s)…
+          </p>
         )}
         {scanError && <p className="text-yellow-400 text-sm">{scanError}</p>}
 
@@ -166,7 +192,9 @@ export default function AdminPage() {
                   <p className="text-xs text-gray-400">{d.ip}</p>
                 </div>
                 {selectedIp === d.ip && (
-                  <span className="ml-auto text-green-400 text-sm">Selected</span>
+                  <span className="ml-auto text-green-400 text-sm">
+                    Selected
+                  </span>
                 )}
               </button>
             ))}
@@ -174,8 +202,38 @@ export default function AdminPage() {
         )}
 
         {!scanning && sonosDevices.length === 0 && !scanError && (
-          <p className="text-gray-500 text-sm">Click Scan to find Sonos speakers on your network.</p>
+          <p className="text-gray-500 text-sm">
+            Click Scan to find Sonos speakers on your network.
+          </p>
         )}
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold mb-3">Max volume</h2>
+        <div className="rounded-xl bg-gray-800 p-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={maxVolume}
+              onChange={(e) => setMaxVolume(Number(e.target.value))}
+              className="flex-1 accent-green-500"
+            />
+            <span className="w-12 text-right text-sm font-semibold">
+              {maxVolume}
+            </span>
+          </div>
+          <button
+            onClick={saveMaxVolume}
+            className="px-3 py-1.5 rounded-xl bg-gray-700 hover:bg-gray-600 text-sm transition-colors"
+          >
+            Save max volume
+          </button>
+          <p className="text-xs text-gray-400">
+            Playback volume will never go above this value.
+          </p>
+        </div>
       </section>
 
       {/* Saved playlists */}
@@ -196,12 +254,23 @@ export default function AdminPage() {
           ) : (
             <div className="space-y-2">
               {savedPlaylists.map((pl) => (
-                <div key={pl.id} className="flex items-center gap-3 px-4 py-3 rounded-xl bg-gray-800">
+                <div
+                  key={pl.id}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-gray-800"
+                >
                   <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0">
                     {pl.imageUrl ? (
-                      <Image src={pl.imageUrl} alt={pl.name} fill className="object-cover" sizes="40px" />
+                      <Image
+                        src={pl.imageUrl}
+                        alt={pl.name}
+                        fill
+                        className="object-cover"
+                        sizes="40px"
+                      />
                     ) : (
-                      <div className="w-full h-full bg-gray-700 flex items-center justify-center text-lg">🎵</div>
+                      <div className="w-full h-full bg-gray-700 flex items-center justify-center text-lg">
+                        🎵
+                      </div>
                     )}
                   </div>
                   <p className="flex-1 font-medium text-sm">{pl.name}</p>
@@ -224,11 +293,18 @@ export default function AdminPage() {
           <div className="w-full max-w-md bg-gray-900 rounded-2xl p-5 max-h-[70vh] flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-lg">Your Playlists</h3>
-              <button onClick={() => setShowAddPlaylist(false)} className="text-gray-400 hover:text-white text-xl">✕</button>
+              <button
+                onClick={() => setShowAddPlaylist(false)}
+                className="text-gray-400 hover:text-white text-xl"
+              >
+                ✕
+              </button>
             </div>
             <div className="overflow-y-auto space-y-2">
               {myPlaylists.length === 0 ? (
-                <p className="text-gray-400 text-sm text-center py-8">Loading…</p>
+                <p className="text-gray-400 text-sm text-center py-8">
+                  Loading…
+                </p>
               ) : (
                 myPlaylists.map((pl) => (
                   <button
@@ -238,9 +314,17 @@ export default function AdminPage() {
                   >
                     <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0">
                       {pl.images[0] ? (
-                        <Image src={pl.images[0].url} alt={pl.name} fill className="object-cover" sizes="40px" />
+                        <Image
+                          src={pl.images[0].url}
+                          alt={pl.name}
+                          fill
+                          className="object-cover"
+                          sizes="40px"
+                        />
                       ) : (
-                        <div className="w-full h-full bg-gray-700 flex items-center justify-center">🎵</div>
+                        <div className="w-full h-full bg-gray-700 flex items-center justify-center">
+                          🎵
+                        </div>
                       )}
                     </div>
                     <p className="font-medium text-sm">{pl.name}</p>

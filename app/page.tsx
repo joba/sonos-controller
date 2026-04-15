@@ -9,15 +9,17 @@ export default function Home() {
     return (
       <main className="flex flex-col items-center justify-center min-h-screen p-8 text-center">
         <div className="text-6xl mb-6">🎵</div>
-        <h1 className="text-2xl font-bold text-gray-300 mb-2">No playlists yet</h1>
-        <p className="text-gray-500">Ask a grown-up to add some music!</p>
+        <h1 className="text-2xl font-bold text-gray-300 mb-2">
+          Inga spellistor än
+        </h1>
+        <p className="text-gray-500">Be en vuxen att lägga till lite musik!</p>
       </main>
     );
   }
 
   return (
     <main className="p-6 max-w-2xl mx-auto">
-      <h1 className="text-3xl font-bold text-center mb-8">🎵 Music</h1>
+      <h1 className="text-3xl font-bold text-center mb-8">🎵 Musik</h1>
       <div className="grid grid-cols-2 gap-5">
         {playlists.map((playlist) => (
           <Link

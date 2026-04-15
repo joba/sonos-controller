@@ -20,6 +20,10 @@ function formatMs(ms: number) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
+function clampVolume(value: number, max: number) {
+  return Math.max(0, Math.min(max, Math.round(value)));
+}
+
 export default function PlaylistPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -28,17 +32,31 @@ export default function PlaylistPage() {
   const [error, setError] = useState("");
   const [playingUri, setPlayingUri] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
+  const [maxVolume, setMaxVolume] = useState(50);
   const [volume, setVolume] = useState(50);
 
   useEffect(() => {
-    fetch(`/api/spotify/playlist/${id}`)
-      .then(async (r) => {
+    Promise.all([
+      fetch(`/api/spotify/playlist/${id}`).then(async (r) => {
         const data = await r.json();
         if (!r.ok) throw new Error(data?.error ?? r.statusText);
-        return data;
-      })
-      .then((data: Track[]) => {
-        setTracks(data.filter((t) => t.item?.uri));
+        return data as Track[];
+      }),
+      fetch("/api/admin/config")
+        .then(async (r) => {
+          if (!r.ok) return null;
+          return (await r.json()) as { maxVolume?: number };
+        })
+        .catch(() => null),
+    ])
+      .then(([playlistData, config]) => {
+        setTracks(playlistData.filter((t) => t.item?.uri));
+        const configuredMax =
+          typeof config?.maxVolume === "number"
+            ? clampVolume(config.maxVolume, 100)
+            : 50;
+        setMaxVolume(configuredMax);
+        setVolume((prev) => clampVolume(prev, configuredMax));
         setLoading(false);
       })
       .catch((err) => {
@@ -68,11 +86,12 @@ export default function PlaylistPage() {
   }
 
   async function handleVolume(v: number) {
-    setVolume(v);
+    const boundedVolume = clampVolume(v, maxVolume);
+    setVolume(boundedVolume);
     await fetch("/api/playback/volume", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ volume: v }),
+      body: JSON.stringify({ volume: boundedVolume }),
     });
   }
 
@@ -88,7 +107,12 @@ export default function PlaylistPage() {
     return (
       <main className="flex flex-col items-center justify-center min-h-screen gap-4 p-8 text-center">
         <p className="text-red-400 text-sm">{error}</p>
-        <button onClick={() => router.push("/")} className="text-gray-400 hover:text-white text-sm">← Back</button>
+        <button
+          onClick={() => router.push("/")}
+          className="text-gray-400 hover:text-white text-sm"
+        >
+          ← Back
+        </button>
       </main>
     );
   }
@@ -96,7 +120,7 @@ export default function PlaylistPage() {
   const currentTrack = tracks.find((t) => t.item.uri === playingUri)?.item;
 
   return (
-    <main className="max-w-xl mx-auto p-4 pb-36">
+    <main className="max-w-6xl mx-auto p-4 pb-36">
       <button
         onClick={() => router.push("/")}
         className="text-gray-400 hover:text-white mb-6 block"
@@ -104,46 +128,53 @@ export default function PlaylistPage() {
         ← Back
       </button>
 
-      <div className="space-y-1">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 gap-4">
         {tracks.map(({ item }) => (
           <button
             key={item.id}
             onClick={() => playTrack(item.uri)}
-            className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-colors text-left ${
+            className={`relative w-full overflow-hidden rounded-2xl text-left transition-all group ${
               playingUri === item.uri
-                ? "bg-green-600/20 border border-green-600/50"
-                : "bg-gray-800/60 hover:bg-gray-700"
+                ? "ring-2 ring-green-500 ring-offset-2 ring-offset-black"
+                : "hover:scale-[1.02]"
             }`}
           >
-            <div className="relative w-12 h-12 rounded-lg overflow-hidden shrink-0">
+            <div className="relative w-full aspect-square bg-gray-800">
               {item.album.images[0] ? (
                 <Image
                   src={item.album.images[0].url}
                   alt={item.album.name}
                   fill
                   className="object-cover"
-                  sizes="48px"
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
                 />
               ) : (
-                <div className="w-full h-full bg-gray-700 flex items-center justify-center text-xl">
+                <div className="w-full h-full bg-gray-700 flex items-center justify-center text-4xl">
                   🎵
                 </div>
               )}
+
+              <div className="absolute inset-0 bg-linear-to-t from-black/90 via-black/35 to-transparent" />
+
+              <div className="absolute bottom-0 left-0 right-0 p-4">
+                <p className="font-semibold truncate text-sm sm:text-base text-white">
+                  {item.name}
+                </p>
+                <p className="text-gray-200/90 text-xs sm:text-sm truncate">
+                  {item.artists.map((a) => a.name).join(", ")}
+                </p>
+              </div>
+
+              <div className="absolute top-3 right-3 px-2 py-1 rounded-md bg-black/60 text-xs text-gray-200">
+                {formatMs(item.duration_ms)}
+              </div>
+
               {playingUri === item.uri && !paused && (
-                <div className="absolute inset-0 bg-green-600/40 flex items-center justify-center">
-                  <span className="text-white text-lg">▶</span>
+                <div className="absolute inset-0 bg-green-600/30 flex items-center justify-center">
+                  <span className="text-white text-3xl">▶</span>
                 </div>
               )}
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-medium truncate text-sm">{item.name}</p>
-              <p className="text-gray-400 text-xs truncate">
-                {item.artists.map((a) => a.name).join(", ")}
-              </p>
-            </div>
-            <span className="text-gray-500 text-xs shrink-0">
-              {formatMs(item.duration_ms)}
-            </span>
           </button>
         ))}
       </div>
@@ -168,7 +199,7 @@ export default function PlaylistPage() {
                 <input
                   type="range"
                   min={0}
-                  max={100}
+                  max={maxVolume}
                   value={volume}
                   onChange={(e) => handleVolume(Number(e.target.value))}
                   className="flex-1 accent-green-500"
