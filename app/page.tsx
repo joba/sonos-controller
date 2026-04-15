@@ -25,7 +25,7 @@ export default function Home() {
           <Link
             key={playlist.id}
             href={`/playlist/${playlist.id}`}
-            className="group block rounded-2xl overflow-hidden bg-gray-800 hover:bg-gray-700 transition-colors active:scale-95 transition-transform"
+            className="group block rounded-2xl overflow-hidden bg-gray-800 hover:bg-gray-700 active:scale-95 transition-transform"
           >
             <div className="relative aspect-square">
               {playlist.imageUrl ? (

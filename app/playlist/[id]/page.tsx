@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 
@@ -34,6 +34,7 @@ export default function PlaylistPage() {
   const [paused, setPaused] = useState(false);
   const [maxVolume, setMaxVolume] = useState(50);
   const [volume, setVolume] = useState(50);
+  const hasSeenPlaying = useRef(false);
 
   useEffect(() => {
     Promise.all([
@@ -50,7 +51,8 @@ export default function PlaylistPage() {
         .catch(() => null),
     ])
       .then(([playlistData, config]) => {
-        setTracks(playlistData.filter((t) => t.item?.uri));
+        const filtered = playlistData.filter((t) => t.item?.uri);
+        setTracks(filtered);
         const configuredMax =
           typeof config?.maxVolume === "number"
             ? clampVolume(config.maxVolume, 100)
@@ -58,12 +60,55 @@ export default function PlaylistPage() {
         setMaxVolume(configuredMax);
         setVolume((prev) => clampVolume(prev, configuredMax));
         setLoading(false);
+        // Check if a track from this playlist is already playing
+        fetch("/api/playback/status")
+          .then(async (r) => {
+            if (!r.ok) return;
+            const { state, spotifyUri } = await r.json();
+            if (!spotifyUri) return;
+            const match = filtered.find((t) => t.item.uri === spotifyUri);
+            if (match) {
+              setPlayingUri(spotifyUri);
+              setPaused(state === "PAUSED_PLAYBACK");
+            }
+          })
+          .catch(() => null);
       })
       .catch((err) => {
         setError(String(err));
         setLoading(false);
       });
   }, [id]);
+
+  useEffect(() => {
+    if (!playingUri || paused) return;
+
+    hasSeenPlaying.current = false;
+
+    const interval = setInterval(async () => {
+      try {
+        const r = await fetch("/api/playback/status");
+        if (!r.ok) return;
+        const { state } = await r.json();
+        if (state === "PLAYING") {
+          hasSeenPlaying.current = true;
+        } else if (state === "STOPPED" && hasSeenPlaying.current) {
+          const currentIndex = tracks.findIndex((t) => t.item.uri === playingUri);
+          const next = tracks[currentIndex + 1];
+          if (next) {
+            playTrack(next.item.uri);
+          } else {
+            setPlayingUri(null);
+          }
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playingUri, paused, tracks]);
 
   async function playTrack(uri: string) {
     setPlayingUri(uri);
@@ -133,7 +178,7 @@ export default function PlaylistPage() {
           <button
             key={item.id}
             onClick={() => playTrack(item.uri)}
-            className={`relative w-full overflow-hidden rounded-2xl text-left transition-all group ${
+            className={`relative cursor-pointer w-full overflow-hidden rounded-2xl text-left transition-all group ${
               playingUri === item.uri
                 ? "ring-2 ring-green-500 ring-offset-2 ring-offset-black"
                 : "hover:scale-[1.02]"
