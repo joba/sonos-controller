@@ -22,7 +22,7 @@
 
 # misc
 .DS_Store
-.claude
+/.claude/
 *.pem
 
 # debug
