@@ -14,6 +14,11 @@ export default function AdminPage() {
   const [maxVolume, setMaxVolume] = useState<number>(50);
   const [savedPlaylists, setSavedPlaylists] = useState<SavedPlaylist[]>([]);
   const [myPlaylists, setMyPlaylists] = useState<SpotifyPlaylist[]>([]);
+  const [loadingMyPlaylists, setLoadingMyPlaylists] = useState(false);
+  const [myPlaylistsError, setMyPlaylistsError] = useState("");
+  const [manualPlaylistInput, setManualPlaylistInput] = useState("");
+  const [addingManualPlaylist, setAddingManualPlaylist] = useState(false);
+  const [manualPlaylistError, setManualPlaylistError] = useState("");
   const [showAddPlaylist, setShowAddPlaylist] = useState(false);
   const [spotifyLinked, setSpotifyLinked] = useState(true);
   const [scanning, setScanning] = useState(false);
@@ -91,12 +96,27 @@ export default function AdminPage() {
     setTimeout(() => setStatus(""), 2000);
   }
 
+  async function loadMyPlaylists() {
+    setLoadingMyPlaylists(true);
+    setMyPlaylistsError("");
+
+    const res = await fetch(`/api/spotify/my-playlists?ts=${Date.now()}`, {
+      cache: "no-store",
+    });
+
+    if (res.ok) {
+      setMyPlaylists(await res.json());
+    } else {
+      const err = await res.json().catch(() => ({}));
+      setMyPlaylistsError(err?.error ?? "Could not load playlists.");
+    }
+
+    setLoadingMyPlaylists(false);
+  }
+
   async function openAddPlaylist() {
     setShowAddPlaylist(true);
-    if (myPlaylists.length === 0) {
-      const res = await fetch("/api/spotify/my-playlists");
-      if (res.ok) setMyPlaylists(await res.json());
-    }
+    await loadMyPlaylists();
   }
 
   async function addPlaylist(pl: SpotifyPlaylist) {
@@ -114,6 +134,41 @@ export default function AdminPage() {
       prev.find((p) => p.id === pl.id) ? prev : [...prev, payload],
     );
     setShowAddPlaylist(false);
+  }
+
+  async function addPlaylistByUrlOrId() {
+    const value = manualPlaylistInput.trim();
+    if (!value) {
+      setManualPlaylistError("Paste a Spotify playlist URL or ID.");
+      return;
+    }
+
+    setAddingManualPlaylist(true);
+    setManualPlaylistError("");
+
+    const res = await fetch("/api/admin/playlists", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playlistIdOrUrl: value }),
+    });
+
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setManualPlaylistError(body?.error ?? "Could not add playlist.");
+      setAddingManualPlaylist(false);
+      return;
+    }
+
+    const playlist = body?.playlist as SavedPlaylist | undefined;
+    if (playlist?.id) {
+      setSavedPlaylists((prev) =>
+        prev.find((p) => p.id === playlist.id) ? prev : [...prev, playlist],
+      );
+      setManualPlaylistInput("");
+      setShowAddPlaylist(false);
+    }
+
+    setAddingManualPlaylist(false);
   }
 
   async function removePlaylist(id: string) {
@@ -293,17 +348,58 @@ export default function AdminPage() {
           <div className="w-full max-w-md bg-gray-900 rounded-2xl p-5 max-h-[70vh] flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-lg">Your Playlists</h3>
-              <button
-                onClick={() => setShowAddPlaylist(false)}
-                className="text-gray-400 hover:text-white text-xl"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={loadMyPlaylists}
+                  disabled={loadingMyPlaylists}
+                  className="text-xs px-2 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-50"
+                >
+                  {loadingMyPlaylists ? "Refreshing..." : "Refresh"}
+                </button>
+                <button
+                  onClick={() => setShowAddPlaylist(false)}
+                  className="text-gray-400 hover:text-white text-xl"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
             <div className="overflow-y-auto space-y-2">
-              {myPlaylists.length === 0 ? (
+              <div className="space-y-2 rounded-xl border border-gray-800 bg-gray-950/60 p-3 mb-3">
+                <p className="text-xs text-gray-300">
+                  Add by Spotify URL or playlist ID
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    value={manualPlaylistInput}
+                    onChange={(e) => setManualPlaylistInput(e.target.value)}
+                    placeholder="https://open.spotify.com/playlist/..."
+                    className="flex-1 rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm outline-none focus:border-green-500"
+                  />
+                  <button
+                    onClick={addPlaylistByUrlOrId}
+                    disabled={addingManualPlaylist}
+                    className="px-3 py-2 rounded-lg bg-green-700 hover:bg-green-600 disabled:opacity-50 text-sm font-semibold"
+                  >
+                    {addingManualPlaylist ? "Adding..." : "Add"}
+                  </button>
+                </div>
+                {manualPlaylistError && (
+                  <p className="text-xs text-red-400">{manualPlaylistError}</p>
+                )}
+              </div>
+
+              {loadingMyPlaylists && myPlaylists.length === 0 ? (
                 <p className="text-gray-400 text-sm text-center py-8">
                   Loading…
+                </p>
+              ) : myPlaylistsError ? (
+                <p className="text-red-400 text-sm text-center py-8">
+                  {myPlaylistsError}
+                </p>
+              ) : myPlaylists.length === 0 ? (
+                <p className="text-gray-400 text-sm text-center py-8">
+                  No playlists found.
                 </p>
               ) : (
                 myPlaylists.map((pl) => (

@@ -52,6 +52,13 @@ export default function PlaylistPage() {
     ])
       .then(([playlistData, config]) => {
         const filtered = playlistData.filter((t) => t.item?.uri);
+        if (filtered.length === 0 && playlistData.length === 0) {
+          setError(
+            "Could not load songs from this playlist. This is usually because the playlist is owned by another Spotify user — Spotify's API only allows access to tracks from playlists you own. Try creating your own copy of the playlist in Spotify and adding that instead.",
+          );
+          setLoading(false);
+          return;
+        }
         setTracks(filtered);
         const configuredMax =
           typeof config?.maxVolume === "number"
@@ -93,7 +100,9 @@ export default function PlaylistPage() {
         if (state === "PLAYING") {
           hasSeenPlaying.current = true;
         } else if (state === "STOPPED" && hasSeenPlaying.current) {
-          const currentIndex = tracks.findIndex((t) => t.item.uri === playingUri);
+          const currentIndex = tracks.findIndex(
+            (t) => t.item.uri === playingUri,
+          );
           const next = tracks[currentIndex + 1];
           if (next) {
             playTrack(next.item.uri);
@@ -107,7 +116,7 @@ export default function PlaylistPage() {
     }, 2000);
 
     return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playingUri, paused, tracks]);
 
   async function playTrack(uri: string) {
