@@ -24,6 +24,29 @@ function clampVolume(value: number, max: number) {
   return Math.max(0, Math.min(max, Math.round(value)));
 }
 
+function isNearEnd(
+  relTimeSec: number | null,
+  durationSec: number | null,
+  fallbackDurationSec: number | null,
+) {
+  if (relTimeSec === null) return false;
+  const effectiveDuration = durationSec ?? fallbackDurationSec;
+  if (!effectiveDuration || effectiveDuration <= 0) return false;
+  return relTimeSec >= Math.max(0, effectiveDuration - 3);
+}
+
+function reachedTrackEnd(
+  relTimeSec: number | null,
+  durationSec: number | null,
+  fallbackDurationSec: number | null,
+  maxObservedRelTimeSec: number,
+) {
+  const effectiveDuration = durationSec ?? fallbackDurationSec;
+  if (!effectiveDuration || effectiveDuration <= 0) return false;
+  if (isNearEnd(relTimeSec, durationSec, fallbackDurationSec)) return true;
+  return maxObservedRelTimeSec >= Math.max(0, effectiveDuration - 3);
+}
+
 export default function PlaylistPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -35,6 +58,12 @@ export default function PlaylistPage() {
   const [maxVolume, setMaxVolume] = useState(50);
   const [volume, setVolume] = useState(50);
   const hasSeenPlaying = useRef(false);
+  const consecutiveStoppedPolls = useRef(0);
+  const consecutiveEarlyStoppedPolls = useRef(0);
+  const isAdvancing = useRef(false);
+  const isRecovering = useRef(false);
+  const resumeAttempts = useRef(0);
+  const maxObservedRelTimeSec = useRef(0);
 
   useEffect(() => {
     Promise.all([
@@ -91,24 +120,87 @@ export default function PlaylistPage() {
     if (!playingUri || paused) return;
 
     hasSeenPlaying.current = false;
+    consecutiveStoppedPolls.current = 0;
+    consecutiveEarlyStoppedPolls.current = 0;
+    isAdvancing.current = false;
+    isRecovering.current = false;
+    resumeAttempts.current = 0;
+    maxObservedRelTimeSec.current = 0;
 
     const interval = setInterval(async () => {
       try {
         const r = await fetch("/api/playback/status");
         if (!r.ok) return;
-        const { state } = await r.json();
+        const { state, spotifyUri, relTimeSec, durationSec } = await r.json();
+        if (
+          spotifyUri === playingUri &&
+          typeof relTimeSec === "number" &&
+          Number.isFinite(relTimeSec)
+        ) {
+          maxObservedRelTimeSec.current = Math.max(
+            maxObservedRelTimeSec.current,
+            relTimeSec,
+          );
+        }
+
         if (state === "PLAYING") {
           hasSeenPlaying.current = true;
+          consecutiveStoppedPolls.current = 0;
+          consecutiveEarlyStoppedPolls.current = 0;
+          isRecovering.current = false;
         } else if (state === "STOPPED" && hasSeenPlaying.current) {
+          // Sonos can briefly report STOPPED during transitions; require two
+          // consecutive STOPPED polls for the same track before advancing.
+          if (spotifyUri !== playingUri || isAdvancing.current) return;
+
+          const currentTrack = tracks.find((t) => t.item.uri === playingUri);
+          const fallbackDurationSec = currentTrack
+            ? Math.floor(currentTrack.item.duration_ms / 1000)
+            : null;
+          if (
+            !reachedTrackEnd(
+              relTimeSec,
+              durationSec,
+              fallbackDurationSec,
+              maxObservedRelTimeSec.current,
+            )
+          ) {
+            consecutiveStoppedPolls.current = 0;
+
+            // If playback unexpectedly stops early, try to recover with a
+            // guarded resume before giving up.
+            consecutiveEarlyStoppedPolls.current += 1;
+            if (
+              consecutiveEarlyStoppedPolls.current >= 2 &&
+              !isRecovering.current &&
+              resumeAttempts.current < 2
+            ) {
+              isRecovering.current = true;
+              resumeAttempts.current += 1;
+              await fetch("/api/playback/resume", { method: "POST" });
+            }
+            return;
+          }
+
+          consecutiveStoppedPolls.current += 1;
+          consecutiveEarlyStoppedPolls.current = 0;
+          if (consecutiveStoppedPolls.current < 2) return;
+
           const currentIndex = tracks.findIndex(
             (t) => t.item.uri === playingUri,
           );
           const next = tracks[currentIndex + 1];
           if (next) {
+            isAdvancing.current = true;
+            maxObservedRelTimeSec.current = 0;
             playTrack(next.item.uri);
           } else {
             setPlayingUri(null);
           }
+        } else {
+          consecutiveStoppedPolls.current = 0;
+          consecutiveEarlyStoppedPolls.current = 0;
+          isRecovering.current = false;
         }
       } catch {
         // ignore polling errors
@@ -211,10 +303,10 @@ export default function PlaylistPage() {
               <div className="absolute inset-0 bg-linear-to-t from-black/90 via-black/35 to-transparent" />
 
               <div className="absolute bottom-0 left-0 right-0 p-4">
-                <p className="font-semibold truncate text-sm sm:text-base text-white">
+                <p className="font-semibold truncate text-sm sm:text-base text-white uppercase">
                   {item.name}
                 </p>
-                <p className="text-gray-200/90 text-xs sm:text-sm truncate">
+                <p className="text-gray-200/90 text-xs sm:text-sm truncate uppercase">
                   {item.artists.map((a) => a.name).join(", ")}
                 </p>
               </div>

@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sonos App — Raspberry Pi 5 Setup Guide</title>
+    <style>
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        max-width: 800px;
+        margin: 40px auto;
+        padding: 0 40px;
+        color: #1a1a1a;
+        line-height: 1.6;
+      }
+      h1 {
+        font-size: 1.8em;
+        border-bottom: 2px solid #1a1a1a;
+        padding-bottom: 10px;
+      }
+      h2 {
+        font-size: 1.2em;
+        margin-top: 2em;
+        color: #333;
+      }
+      code {
+        background: #f4f4f4;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-family: "SFMono-Regular", Consolas, monospace;
+        font-size: 0.9em;
+      }
+      pre {
+        background: #f4f4f4;
+        padding: 16px;
+        border-radius: 6px;
+        overflow-x: auto;
+        font-family: "SFMono-Regular", Consolas, monospace;
+        font-size: 0.88em;
+        line-height: 1.5;
+      }
+      ol li,
+      ul li {
+        margin: 6px 0;
+      }
+      .note {
+        background: #fff8e1;
+        border-left: 4px solid #f5a623;
+        padding: 10px 16px;
+        margin: 16px 0;
+        border-radius: 0 4px 4px 0;
+      }
+      @media print {
+        body {
+          margin: 20px;
+        }
+        pre {
+          white-space: pre-wrap;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Sonos App — Raspberry Pi 5 Setup Guide</h1>
+    <p>
+      This guide walks you through hosting your Next.js Sonos controller app on
+      a Raspberry Pi 5 running Ubuntu Server 24.04 LTS.
+    </p>
+    <p>
+      <a
+        href="https://www.webhallen.com/se/product/393908-Webhallon-Config-v-5-8-1-Startpaket?utm_source=google&utm_medium=cpc&gad_source=1&gad_campaignid=23558102627&gbraid=0AAAAAD0gAa2k11Zda3xy8d_rABSWo8X00&gclid=CjwKCAjw14zPBhAuEiwAP3-Eb3UbrHuVCE7Qd0Jnz4eaXgSwns3qB9XhA8LZiLkBiJpke8B2a0ehCBoC5IAQAvD_BwE"
+        >Kit here</a
+      >
+    </p>
+    <hr />
+
+    <h2>What you need</h2>
+    <ul>
+      <li>Raspberry Pi 5 (8GB)</li>
+      <li>Kingston 64GB microSD card</li>
+      <li>Raspberry Pi 5 power supply (USB-C)</li>
+      <li>Another computer to flash the SD card</li>
+      <li>Your project files (or Git access to your repo)</li>
+    </ul>
+
+    <h2>Step 1 — Flash Ubuntu Server to the SD card</h2>
+    <ol>
+      <li>
+        Download and install <strong>Raspberry Pi Imager</strong> from
+        <code>raspberrypi.com/software</code>
+      </li>
+      <li>Insert your SD card into your computer</li>
+      <li>
+        Open Raspberry Pi Imager and choose:
+        <ul>
+          <li><strong>Device:</strong> Raspberry Pi 5</li>
+          <li>
+            <strong>OS:</strong> Other general-purpose OS → Ubuntu → Ubuntu
+            Server 24.04 LTS (64-bit)
+          </li>
+          <li><strong>Storage:</strong> your SD card</li>
+        </ul>
+      </li>
+      <li>
+        Click <strong>Next</strong>, then <strong>Edit Settings</strong> to
+        configure:
+        <ul>
+          <li>Set a hostname (e.g. <code>sonos-pi</code>)</li>
+          <li>Set a username and password</li>
+          <li>Enable SSH (under the Services tab)</li>
+          <li>Optionally configure Wi-Fi (Ethernet recommended)</li>
+        </ul>
+      </li>
+      <li>
+        Click <strong>Save</strong>, then <strong>Yes</strong> to write the
+        image
+      </li>
+    </ol>
+
+    <h2>Step 2 — Boot and connect</h2>
+    <ol>
+      <li>
+        Insert the SD card into the Pi and connect it to your network via
+        Ethernet
+      </li>
+      <li>Plug in the power supply — it will boot automatically</li>
+      <li>Wait ~60 seconds for first boot to complete</li>
+      <li>
+        Find the Pi's IP address on your router, or try:
+        <pre>ping sonos-pi.local</pre>
+      </li>
+      <li>
+        SSH into the Pi:
+        <pre>ssh your-username@sonos-pi.local</pre>
+      </li>
+    </ol>
+
+    <h2>Step 3 — Update the system</h2>
+    <pre>sudo apt update && sudo apt upgrade -y</pre>
+
+    <h2>Step 4 — Install Node.js via nvm</h2>
+    <div class="note">
+      Do not use <code>apt install nodejs</code> — the version is outdated. Use
+      nvm instead.
+    </div>
+    <pre>
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+source ~/.bashrc
+nvm install --lts
+node -v   # should print v22.x or later</pre
+    >
+
+    <h2>Step 5 — Copy your project to the Pi</h2>
+    <p>If your project is in a Git repository:</p>
+    <pre>
+git clone https://github.com/your-username/your-repo.git ~/sonos
+cd ~/sonos</pre
+    >
+
+    <p>Or copy files from your Mac using scp:</p>
+    <pre>
+# Run this on your Mac, not the Pi
+scp -r /Users/jonbagling/Documents/jobb/sonos your-username@sonos-pi.local:~/sonos</pre
+    >
+
+    <h2>Step 6 — Set up environment variables</h2>
+    <pre>
+cd ~/sonos
+cp .env.example .env.local   # if an example file exists
+nano .env.local               # add your Spotify API keys etc.</pre
+    >
+
+    <h2>Step 7 — Install dependencies and build</h2>
+    <pre>
+cd ~/sonos
+npm install
+npm run build</pre
+    >
+    <div class="note">
+      The first build may take a few minutes on the Pi. Subsequent builds are
+      faster.
+    </div>
+
+    <h2>Step 8 — Install pm2 and start the app</h2>
+    <p>
+      pm2 keeps your app running in the background and restarts it after
+      reboots.
+    </p>
+    <pre>
+npm install -g pm2
+pm2 start npm --name sonos -- start
+pm2 save
+pm2 startup</pre
+    >
+    <p>
+      The <code>pm2 startup</code> command will print a
+      <code>sudo</code> command — copy and run it to enable autostart on boot.
+    </p>
+
+    <h2>Step 9 — Verify it's running</h2>
+    <pre>
+pm2 status           # should show "sonos" as online
+pm2 logs sonos       # view live logs</pre
+    >
+    <p>
+      Open a browser on the same network and go to:
+      <code>http://sonos-pi.local:3000</code>
+    </p>
+
+    <h2>Step 10 — Optional: use port 80</h2>
+    <p>
+      To access the app at <code>http://sonos-pi.local</code> without typing
+      <code>:3000</code>, use a port redirect:
+    </p>
+    <pre>
+sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3000
+sudo apt install iptables-persistent -y
+sudo netfilter-persistent save</pre
+    >
+
+    <hr />
+
+    <h2>Useful commands</h2>
+    <pre>
+pm2 restart sonos    # restart the app
+pm2 stop sonos       # stop the app
+pm2 logs sonos       # view logs
+pm2 monit            # live process monitor</pre
+    >
+
+    <h2>Updating the app</h2>
+    <pre>
+cd ~/sonos
+git pull             # if using Git
+npm install
+npm run build
+pm2 restart sonos</pre
+    >
+  </body>
+</html>
