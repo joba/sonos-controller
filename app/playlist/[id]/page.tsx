@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
+import { FaPlay, FaPause } from "react-icons/fa";
 
 type Track = {
   item: {
@@ -173,7 +174,8 @@ export default function PlaylistPage() {
             if (
               consecutiveEarlyStoppedPolls.current >= 2 &&
               !isRecovering.current &&
-              resumeAttempts.current < 2
+              resumeAttempts.current < 2 &&
+              maxObservedRelTimeSec.current >= 60
             ) {
               isRecovering.current = true;
               resumeAttempts.current += 1;
@@ -315,9 +317,11 @@ export default function PlaylistPage() {
                 {formatMs(item.duration_ms)}
               </div>
 
-              {playingUri === item.uri && !paused && (
+              {playingUri === item.uri && (
                 <div className="absolute inset-0 bg-green-600/30 flex items-center justify-center">
-                  <span className="text-white text-3xl">▶</span>
+                  <span className="text-white text-3xl">
+                    {paused ? <FaPlay /> : <FaPause />}
+                  </span>
                 </div>
               )}
             </div>
@@ -332,12 +336,13 @@ export default function PlaylistPage() {
               onClick={togglePause}
               className="w-12 h-12 rounded-full bg-green-600 hover:bg-green-500 flex items-center justify-center text-xl transition-colors shrink-0"
             >
-              {paused ? "▶" : "⏸"}
+              {paused ? <FaPlay /> : <FaPause />}
             </button>
             <div className="flex-1">
               {currentTrack && (
-                <p className="text-sm font-medium truncate">
-                  {currentTrack.name}
+                <p className="text-sm font-medium truncate text-white">
+                  {currentTrack.name} -{" "}
+                  {currentTrack.artists.map((a) => a.name).join(", ")}
                 </p>
               )}
               <div className="flex items-center gap-2 mt-1">
