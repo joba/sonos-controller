@@ -174,8 +174,7 @@ export default function PlaylistPage() {
             if (
               consecutiveEarlyStoppedPolls.current >= 2 &&
               !isRecovering.current &&
-              resumeAttempts.current < 2 &&
-              maxObservedRelTimeSec.current >= 60
+              resumeAttempts.current < 2
             ) {
               isRecovering.current = true;
               resumeAttempts.current += 1;
