@@ -58,6 +58,7 @@ export default function PlaylistPage() {
   const [paused, setPaused] = useState(false);
   const [maxVolume, setMaxVolume] = useState(50);
   const [volume, setVolume] = useState(50);
+  const [actionError, setActionError] = useState("");
   const hasSeenPlaying = useRef(false);
   const consecutiveStoppedPolls = useRef(0);
   const consecutiveEarlyStoppedPolls = useRef(0);
@@ -65,6 +66,7 @@ export default function PlaylistPage() {
   const isRecovering = useRef(false);
   const resumeAttempts = useRef(0);
   const maxObservedRelTimeSec = useRef(0);
+  const neverStartedPolls = useRef(0);
 
   useEffect(() => {
     Promise.all([
@@ -127,6 +129,7 @@ export default function PlaylistPage() {
     isRecovering.current = false;
     resumeAttempts.current = 0;
     maxObservedRelTimeSec.current = 0;
+    neverStartedPolls.current = 0;
 
     const interval = setInterval(async () => {
       try {
@@ -146,9 +149,21 @@ export default function PlaylistPage() {
 
         if (state === "PLAYING") {
           hasSeenPlaying.current = true;
+          neverStartedPolls.current = 0;
           consecutiveStoppedPolls.current = 0;
           consecutiveEarlyStoppedPolls.current = 0;
           isRecovering.current = false;
+        } else if (state === "STOPPED" && !hasSeenPlaying.current) {
+          // Play was requested but the speaker never actually started audio
+          // (it can accept the command without erroring and just stay stopped,
+          // e.g. if it lost its connection). Surface that instead of silently
+          // doing nothing forever.
+          neverStartedPolls.current += 1;
+          if (neverStartedPolls.current >= 3) {
+            setActionError(
+              "The speaker isn't responding to play. Check that it's powered on and connected.",
+            );
+          }
         } else if (state === "STOPPED" && hasSeenPlaying.current) {
           // Sonos can briefly report STOPPED during transitions; require two
           // consecutive STOPPED polls for the same track before advancing.
@@ -178,7 +193,12 @@ export default function PlaylistPage() {
             ) {
               isRecovering.current = true;
               resumeAttempts.current += 1;
-              await fetch("/api/playback/resume", { method: "POST" });
+              const ok = await postPlayback("/api/playback/resume");
+              if (!ok && resumeAttempts.current >= 2) {
+                setActionError(
+                  "Playback keeps stopping unexpectedly. The speaker may have lost its connection.",
+                );
+              }
             }
             return;
           }
@@ -212,34 +232,48 @@ export default function PlaylistPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playingUri, paused, tracks]);
 
+  async function postPlayback(url: string, body?: object) {
+    try {
+      const r = await fetch(url, {
+        method: "POST",
+        ...(body && {
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+      });
+      if (!r.ok) {
+        const data = await r.json().catch(() => null);
+        setActionError(data?.error ?? `Speaker command failed (${r.status})`);
+        return false;
+      }
+      setActionError("");
+      return true;
+    } catch {
+      setActionError("Could not reach the speaker. Check your connection.");
+      return false;
+    }
+  }
+
   async function playTrack(uri: string) {
     setPlayingUri(uri);
     setPaused(false);
-    await fetch("/api/playback/play", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ uri }),
-    });
+    await postPlayback("/api/playback/play", { uri });
   }
 
   async function togglePause() {
     if (paused) {
-      await fetch("/api/playback/resume", { method: "POST" });
-      setPaused(false);
+      const ok = await postPlayback("/api/playback/resume");
+      if (ok) setPaused(false);
     } else {
-      await fetch("/api/playback/pause", { method: "POST" });
-      setPaused(true);
+      const ok = await postPlayback("/api/playback/pause");
+      if (ok) setPaused(true);
     }
   }
 
   async function handleVolume(v: number) {
     const boundedVolume = clampVolume(v, maxVolume);
     setVolume(boundedVolume);
-    await fetch("/api/playback/volume", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ volume: boundedVolume }),
-    });
+    await postPlayback("/api/playback/volume", { volume: boundedVolume });
   }
 
   if (loading) {
@@ -327,6 +361,14 @@ export default function PlaylistPage() {
           </button>
         ))}
       </div>
+
+      {actionError && (
+        <div className="fixed left-0 right-0 p-3 bg-red-900/90 border-t border-red-700 text-red-100 text-sm text-center z-10"
+          style={{ bottom: playingUri ? "5.5rem" : 0 }}
+        >
+          {actionError}
+        </div>
+      )}
 
       {playingUri && (
         <div className="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800 p-4">

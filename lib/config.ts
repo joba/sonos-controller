@@ -16,6 +16,13 @@ export type Config = {
   sonosDeviceName: string | null;
   maxVolume: number;
   playlists: SavedPlaylist[];
+  // Sonos assigns each household a serial number ("sn") for its linked
+  // Spotify account, embedded in the URIs used to queue Spotify tracks.
+  // The @svrooij/sonos library guesses a hardcoded value that often doesn't
+  // match your household's actual number, causing Sonos to silently accept
+  // play commands without ever starting audio. If playback stops working,
+  // re-check this value (see README).
+  spotifySessionNumber: number;
 };
 
 export type Tokens = {
@@ -27,18 +34,28 @@ export type Tokens = {
 const DEFAULT_MAX_VOLUME = 50;
 const MIN_VOLUME = 0;
 const MAX_VOLUME = 100;
+const DEFAULT_SPOTIFY_SESSION_NUMBER = 7;
 
 const DEFAULT_CONFIG: Config = {
   sonosDeviceIp: null,
   sonosDeviceName: null,
   maxVolume: DEFAULT_MAX_VOLUME,
   playlists: [],
+  spotifySessionNumber: DEFAULT_SPOTIFY_SESSION_NUMBER,
 };
 
 function normalizeMaxVolume(value: unknown): number {
   const numeric = Math.round(Number(value));
   if (!Number.isFinite(numeric)) return DEFAULT_MAX_VOLUME;
   return Math.max(MIN_VOLUME, Math.min(MAX_VOLUME, numeric));
+}
+
+function normalizeSpotifySessionNumber(value: unknown): number {
+  const numeric = Math.round(Number(value));
+  if (!Number.isFinite(numeric) || numeric < 0) {
+    return DEFAULT_SPOTIFY_SESSION_NUMBER;
+  }
+  return numeric;
 }
 
 function ensureDataDir() {
@@ -60,6 +77,9 @@ export function readConfig(): Config {
     ...parsed,
     maxVolume: normalizeMaxVolume(parsed.maxVolume),
     playlists: Array.isArray(parsed.playlists) ? parsed.playlists : [],
+    spotifySessionNumber: normalizeSpotifySessionNumber(
+      parsed.spotifySessionNumber,
+    ),
   };
 }
 

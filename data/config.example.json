@@ -2,5 +2,6 @@
   "sonosDeviceIp": null,
   "sonosDeviceName": null,
   "maxVolume": 50,
-  "playlists": []
+  "playlists": [],
+  "spotifySessionNumber": 7
 }
