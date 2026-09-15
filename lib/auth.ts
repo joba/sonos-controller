@@ -1,14 +1,19 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { SESSION_COOKIE, SESSION_TOKEN } from "./session";
 
-const SESSION_COOKIE = "admin_session";
-const SESSION_TOKEN = "authenticated";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "changeme";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+
+if (!ADMIN_PASSWORD) {
+  throw new Error(
+    "ADMIN_PASSWORD is not set. Add it to .env.local before starting the app.",
+  );
+}
 
 export async function verifyAdminSession() {
   const cookieStore = await cookies();
   const session = cookieStore.get(SESSION_COOKIE);
-  if (session?.value !== ADMIN_PASSWORD) {
+  if (session?.value !== SESSION_TOKEN) {
     redirect("/admin/login");
   }
 }

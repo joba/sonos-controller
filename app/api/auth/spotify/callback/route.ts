@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { writeTokens } from "@/lib/config";
+import { SPOTIFY_OAUTH_STATE_COOKIE } from "@/lib/session";
 
 const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID!;
 const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET!;
@@ -8,9 +9,15 @@ const REDIRECT_URI = process.env.SPOTIFY_REDIRECT_URI!;
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const code = searchParams.get("code");
+  const state = searchParams.get("state");
+  const expectedState = request.cookies.get(SPOTIFY_OAUTH_STATE_COOKIE)?.value;
 
   if (!code) {
     return NextResponse.json({ error: "No code provided" }, { status: 400 });
+  }
+
+  if (!state || !expectedState || state !== expectedState) {
+    return NextResponse.json({ error: "Invalid OAuth state" }, { status: 400 });
   }
 
   const res = await fetch("https://accounts.spotify.com/api/token", {
@@ -40,5 +47,7 @@ export async function GET(request: NextRequest) {
     expiresAt: Date.now() + data.expires_in * 1000,
   });
 
-  return NextResponse.redirect(new URL("/admin", request.url));
+  const response = NextResponse.redirect(new URL("/admin", request.url));
+  response.cookies.delete(SPOTIFY_OAUTH_STATE_COOKIE);
+  return response;
 }

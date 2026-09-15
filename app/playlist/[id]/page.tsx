@@ -75,7 +75,7 @@ export default function PlaylistPage() {
         if (!r.ok) throw new Error(data?.error ?? r.statusText);
         return data as Track[];
       }),
-      fetch("/api/admin/config")
+      fetch("/api/playback/max-volume")
         .then(async (r) => {
           if (!r.ok) return null;
           return (await r.json()) as { maxVolume?: number };
@@ -193,7 +193,13 @@ export default function PlaylistPage() {
             ) {
               isRecovering.current = true;
               resumeAttempts.current += 1;
-              const ok = await postPlayback("/api/playback/resume");
+              // Sonos resets position to 0 when it drops the stream on its
+              // own, so a plain resume would restart the track from the
+              // beginning. Seek back to the last position we actually saw
+              // it play so recovery doesn't sound like a restart.
+              const ok = await postPlayback("/api/playback/resume", {
+                resumeAtSec: maxObservedRelTimeSec.current,
+              });
               if (!ok && resumeAttempts.current >= 2) {
                 setActionError(
                   "Playback keeps stopping unexpectedly. The speaker may have lost its connection.",
@@ -255,6 +261,18 @@ export default function PlaylistPage() {
   }
 
   async function playTrack(uri: string) {
+    if (uri === playingUri) {
+      // Restarting a track that's already playing has proven unreliable on
+      // the speaker (it can get stuck STOPPED) and there's nothing to
+      // change anyway — ignore repeat taps on the currently-playing track.
+      if (!paused) return;
+      // Same track, just paused: resume it instead of running it through
+      // the full Stop/SetAVTransportURI/Play cycle, which would restart it
+      // from the beginning instead of resuming where it was.
+      const ok = await postPlayback("/api/playback/resume");
+      if (ok) setPaused(false);
+      return;
+    }
     setPlayingUri(uri);
     setPaused(false);
     await postPlayback("/api/playback/play", { uri });

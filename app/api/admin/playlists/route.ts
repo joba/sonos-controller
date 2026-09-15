@@ -61,10 +61,16 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as PlaylistCreateBody;
+    // Prefer validating through Spotify whenever playlistIdOrUrl is given,
+    // even if a (trusted-looking) id/name/imageUrl is also present — a
+    // request shouldn't be able to skip Spotify's ownership/existence check
+    // just by including both. The "id" in body check on its own only
+    // exists to satisfy TypeScript's narrowing when playlistIdOrUrl is
+    // absent; the explicit cast below covers that case.
     const playlist =
-      "playlistIdOrUrl" in body
-        ? await resolvePlaylistFromSpotify(body.playlistIdOrUrl ?? "")
-        : body;
+      "playlistIdOrUrl" in body && body.playlistIdOrUrl
+        ? await resolvePlaylistFromSpotify(body.playlistIdOrUrl)
+        : (body as SavedPlaylist);
 
     if (!playlist?.id || !playlist?.name) {
       return NextResponse.json(

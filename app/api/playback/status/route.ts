@@ -1,21 +1,7 @@
 import { NextResponse } from "next/server";
 import { SonosDevice } from "@svrooij/sonos";
 import { readConfig } from "@/lib/config";
-
-function parseSonosClock(value: string | undefined): number | null {
-  if (!value) return null;
-  const parts = value.split(":").map((part) => Number(part));
-  if (parts.some((part) => Number.isNaN(part))) return null;
-  if (parts.length === 3) {
-    const [h, m, s] = parts;
-    return h * 3600 + m * 60 + s;
-  }
-  if (parts.length === 2) {
-    const [m, s] = parts;
-    return m * 60 + s;
-  }
-  return null;
-}
+import { parseSonosClock } from "@/lib/sonosClock";
 
 export async function GET() {
   try {
